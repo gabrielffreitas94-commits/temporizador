@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Temporizador</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="header-title">
+        <h1>Temporizador</h1>
+        <p class="subtitle">Clique em um temporizador para iniciar. Ao clicar em outro, o anterior para automaticamente.</p>
+      </div>
+      <div class="export-actions">
+        <button id="export-json-btn" class="btn btn-secondary" type="button">Exportar JSON</button>
+        <button id="export-csv-btn" class="btn btn-secondary" type="button">Exportar CSV</button>
+      </div>
+    </header>
+
+    <section class="add-timer-section" aria-label="Adicionar temporizador">
+      <form id="add-timer-form" class="add-timer-form">
+        <input
+          id="timer-name-input"
+          type="text"
+          class="input"
+          placeholder="Nome do temporizador (opcional)"
+          maxlength="80"
+          autocomplete="off"
+        />
+        <button id="add-timer-btn" class="btn btn-primary" type="submit">
+          + Adicionar temporizador
+        </button>
+      </form>
+    </section>
+
+    <main>
+      <section class="timers-section" aria-label="Temporizadores ativos">
+        <div class="section-header">
+          <h2>Temporizadores</h2>
+          <span id="total-time" class="total-time">Total: 00:00:00</span>
+        </div>
+        <div id="timers-list" class="timers-list"></div>
+        <p id="empty-state" class="empty-state" hidden>
+          Nenhum temporizador ativo. Clique em "+ Adicionar temporizador" para começar.
+        </p>
+      </section>
+
+      <section id="archived-section" class="archived-section" aria-label="Temporizadores arquivados" hidden>
+        <button id="toggle-archived-btn" class="archived-toggle" type="button" aria-expanded="false">
+          <span id="archived-toggle-label">Arquivados (0)</span>
+          <span class="chevron" aria-hidden="true">▾</span>
+        </button>
+        <div id="archived-list" class="timers-list archived-list" hidden></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

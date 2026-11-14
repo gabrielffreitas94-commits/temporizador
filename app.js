@@ -15,6 +15,7 @@
   /** @type {Timer[]} */
   let timers = loadTimers();
   let archivedExpanded = false;
+  let editingTimerId = null;
   let tickIntervalId = null;
 
   const addTimerForm = document.getElementById("add-timer-form");
@@ -66,6 +67,38 @@
     return [hours, minutes, seconds]
       .map((unit) => String(unit).padStart(2, "0"))
       .join(":");
+  }
+
+  function parseDurationInput(rawValue) {
+    const value = rawValue.trim();
+    if (!value) return null;
+
+    if (/^\d+$/.test(value)) {
+      const seconds = Number(value);
+      return Number.isSafeInteger(seconds) ? seconds * 1000 : null;
+    }
+
+    const parts = value.split(":");
+    if (parts.length < 2 || parts.length > 3) return null;
+    if (!parts.every((part) => /^\d+$/.test(part))) return null;
+
+    const nums = parts.map(Number);
+    let hours = 0;
+    let minutes = 0;
+    let seconds = 0;
+
+    if (nums.length === 2) {
+      [minutes, seconds] = nums;
+    } else {
+      [hours, minutes, seconds] = nums;
+    }
+
+    if (seconds >= 60 || (nums.length === 3 && minutes >= 60)) {
+      return null;
+    }
+
+    const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+    return totalSeconds * 1000;
   }
 
   function stopTimer(timer, now = Date.now()) {
@@ -127,7 +160,57 @@
     if (!timer) return;
 
     stopTimer(timer, now);
+    if (editingTimerId === timerId) {
+      editingTimerId = null;
+    }
     timer.archived = true;
+    saveTimers();
+    syncTicker();
+    render();
+  }
+
+  function startEditingTime(timerId) {
+    const now = Date.now();
+    const timer = timers.find((t) => t.id === timerId);
+    if (!timer || timer.archived) return;
+
+    stopTimer(timer, now);
+    editingTimerId = timerId;
+    saveTimers();
+    syncTicker();
+    render();
+
+    const input = document.querySelector(`[data-edit-input-id="${timerId}"]`);
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  }
+
+  function cancelEditingTime() {
+    editingTimerId = null;
+    render();
+  }
+
+  function saveEditedTime(timerId, rawValue) {
+    const parsedMs = parseDurationInput(rawValue);
+    if (parsedMs === null) {
+      const input = document.querySelector(`[data-edit-input-id="${timerId}"]`);
+      if (input) {
+        input.classList.add("is-invalid");
+        input.setAttribute("aria-invalid", "true");
+        input.focus();
+      }
+      return;
+    }
+
+    const timer = timers.find((t) => t.id === timerId);
+    if (!timer) return;
+
+    timer.elapsedMs = parsedMs;
+    timer.isRunning = false;
+    timer.startedAt = null;
+    editingTimerId = null;
     saveTimers();
     syncTicker();
     render();
@@ -156,7 +239,9 @@
     if (timer.archived) card.classList.add("is-archived");
     card.dataset.id = timer.id;
 
-    if (!timer.archived) {
+    const isEditing = editingTimerId === timer.id && !timer.archived;
+
+    if (!timer.archived && !isEditing) {
       card.setAttribute("role", "button");
       card.setAttribute("tabindex", "0");
       card.addEventListener("click", () => handleTimerClick(timer.id));
@@ -197,47 +282,103 @@
     const right = document.createElement("div");
     right.className = "timer-right";
 
-    const elapsedEl = document.createElement("span");
-    elapsedEl.className = "timer-elapsed";
-    elapsedEl.dataset.elapsedId = timer.id;
-    elapsedEl.textContent = formatDuration(getElapsedMs(timer, now));
-
     const actions = document.createElement("div");
     actions.className = "timer-actions";
 
-    if (!timer.archived) {
-      const archiveBtn = document.createElement("button");
-      archiveBtn.type = "button";
-      archiveBtn.className = "btn btn-ghost";
-      archiveBtn.textContent = "Arquivar";
-      archiveBtn.addEventListener("click", (event) => {
-        event.stopPropagation();
-        archiveTimer(timer.id);
+    if (isEditing) {
+      const timeInput = document.createElement("input");
+      timeInput.type = "text";
+      timeInput.className = "time-edit-input";
+      timeInput.dataset.editInputId = timer.id;
+      timeInput.value = formatDuration(getElapsedMs(timer, now));
+      timeInput.setAttribute("aria-label", `Editar tempo de ${timer.name} (HH:MM:SS)`);
+      timeInput.title = "Formato: HH:MM:SS, MM:SS ou segundos";
+      timeInput.addEventListener("click", (event) => event.stopPropagation());
+      timeInput.addEventListener("input", () => {
+        timeInput.classList.remove("is-invalid");
+        timeInput.removeAttribute("aria-invalid");
       });
-      actions.appendChild(archiveBtn);
+      timeInput.addEventListener("keydown", (event) => {
+        event.stopPropagation();
+        if (event.key === "Enter") {
+          event.preventDefault();
+          saveEditedTime(timer.id, timeInput.value);
+        } else if (event.key === "Escape") {
+          event.preventDefault();
+          cancelEditingTime();
+        }
+      });
+
+      const saveBtn = document.createElement("button");
+      saveBtn.type = "button";
+      saveBtn.className = "btn btn-primary btn-sm";
+      saveBtn.textContent = "Salvar";
+      saveBtn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        saveEditedTime(timer.id, timeInput.value);
+      });
+
+      const cancelBtn = document.createElement("button");
+      cancelBtn.type = "button";
+      cancelBtn.className = "btn btn-ghost";
+      cancelBtn.textContent = "Cancelar";
+      cancelBtn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        cancelEditingTime();
+      });
+
+      actions.append(saveBtn, cancelBtn);
+      right.append(timeInput, actions);
     } else {
-      const restoreBtn = document.createElement("button");
-      restoreBtn.type = "button";
-      restoreBtn.className = "btn btn-ghost";
-      restoreBtn.textContent = "Restaurar";
-      restoreBtn.addEventListener("click", (event) => {
-        event.stopPropagation();
-        unarchiveTimer(timer.id);
-      });
+      const elapsedEl = document.createElement("span");
+      elapsedEl.className = "timer-elapsed";
+      elapsedEl.dataset.elapsedId = timer.id;
+      elapsedEl.textContent = formatDuration(getElapsedMs(timer, now));
 
-      const deleteBtn = document.createElement("button");
-      deleteBtn.type = "button";
-      deleteBtn.className = "btn btn-ghost btn-danger-ghost";
-      deleteBtn.textContent = "Excluir";
-      deleteBtn.addEventListener("click", (event) => {
-        event.stopPropagation();
-        deleteTimer(timer.id);
-      });
+      if (!timer.archived) {
+        const editBtn = document.createElement("button");
+        editBtn.type = "button";
+        editBtn.className = "btn btn-ghost";
+        editBtn.textContent = "Editar";
+        editBtn.addEventListener("click", (event) => {
+          event.stopPropagation();
+          startEditingTime(timer.id);
+        });
 
-      actions.append(restoreBtn, deleteBtn);
+        const archiveBtn = document.createElement("button");
+        archiveBtn.type = "button";
+        archiveBtn.className = "btn btn-ghost";
+        archiveBtn.textContent = "Arquivar";
+        archiveBtn.addEventListener("click", (event) => {
+          event.stopPropagation();
+          archiveTimer(timer.id);
+        });
+        actions.append(editBtn, archiveBtn);
+      } else {
+        const restoreBtn = document.createElement("button");
+        restoreBtn.type = "button";
+        restoreBtn.className = "btn btn-ghost";
+        restoreBtn.textContent = "Restaurar";
+        restoreBtn.addEventListener("click", (event) => {
+          event.stopPropagation();
+          unarchiveTimer(timer.id);
+        });
+
+        const deleteBtn = document.createElement("button");
+        deleteBtn.type = "button";
+        deleteBtn.className = "btn btn-ghost btn-danger-ghost";
+        deleteBtn.textContent = "Excluir";
+        deleteBtn.addEventListener("click", (event) => {
+          event.stopPropagation();
+          deleteTimer(timer.id);
+        });
+
+        actions.append(restoreBtn, deleteBtn);
+      }
+
+      right.append(elapsedEl, actions);
     }
 
-    right.append(elapsedEl, actions);
     card.append(info, right);
     return card;
   }

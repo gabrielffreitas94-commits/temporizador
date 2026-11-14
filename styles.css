@@ -263,6 +263,34 @@ body {
   letter-spacing: 0.02em;
 }
 
+.time-edit-input {
+  width: 112px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1.5px solid var(--primary);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.time-edit-input:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.time-edit-input.is-invalid {
+  border-color: var(--danger);
+  background: #fef2f2;
+}
+
+.btn-sm {
+  padding: 6px 10px;
+  font-size: 0.82rem;
+}
+
 .timer-actions {
   display: flex;
   gap: 6px;
